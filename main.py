@@ -12,13 +12,14 @@ from PIL import Image, ImageTk
 import string
 import threading
 
+# Determine the base path for image resources based on whether the script is frozen (e.g., packed as an exe)
 if getattr(sys, 'frozen', False):
     base_path = sys._MEIPASS
 else:
     base_path = os.path.dirname(os.path.abspath(__file__))
 
 image1 = os.path.join(base_path, 'dev-logo.png')
-
+image2 = os.path.join(base_path, 'dev-logo.png')
 
 class PDFComparerApp:
     def __init__(self, master):
@@ -33,8 +34,6 @@ class PDFComparerApp:
         self.create_widgets()
 
     def create_widgets(self):
-        # Tkinter widgets for UI
-
         # Get the screen width and height
         screen_width = self.master.winfo_screenwidth()
         screen_height = self.master.winfo_screenheight()
@@ -46,9 +45,22 @@ class PDFComparerApp:
         # Set the window geometry
         self.master.geometry(f"900x500+{x_position}+{y_position}")
 
+        # Display two images on the top left and top right of the GUI
+        original_image1 = Image.open(image1)
+        original_image2 = Image.open(image2)
+        resized_image1 = original_image1.resize((original_image1.width // 2, original_image1.height // 2), Image.LANCZOS)
+        resized_image2 = original_image2.resize((original_image2.width // 2, original_image2.height // 2), Image.LANCZOS)
+        self.photo1 = ImageTk.PhotoImage(resized_image1)
+        self.photo2 = ImageTk.PhotoImage(resized_image2)
+
+        self.image_label1 = tk.Label(self.master, image=self.photo1, bg='#1a1a2e')
+        self.image_label1.place(x=10, y=10, anchor='nw')
+
+        self.image_label2 = tk.Label(self.master, image=self.photo2, bg='#1a1a2e')
+        self.image_label2.place(x=880, y=10, anchor='ne')
+
         # Heading
-        heading_label = tk.Label(self.master, text="Content Rationalizer", font=("Helvetica", 26, "bold"), bg='#1a1a2e',
-                                 fg='white')
+        heading_label = tk.Label(self.master, text="Content Rationalizer", font=("Helvetica", 26, "bold"), bg='#1a1a2e', fg='white')
         heading_label.pack(pady=30)
 
         # Input File Location
@@ -81,19 +93,11 @@ class PDFComparerApp:
         compare_frame = tk.Frame(self.master, bg="#1a1a2e")
         compare_frame.pack(pady=20)
 
-        compare_button = tk.Button(compare_frame, text="Rationalize", font=("Helvetica", 10, "bold"),
-                                   command=lambda: threading.Thread(target=self.compare_pdfs).start(), width=20, height=2,
-                                   bg='white')
+        compare_button = tk.Button(compare_frame, text="Rationalize", font=("Helvetica", 10, "bold"), command=lambda: threading.Thread(target=self.compare_pdfs).start(), width=20, height=2, bg='white')
         compare_button.pack(side=tk.LEFT)
 
-        similarity_button = tk.Button(compare_frame, text="Percentage Match", font=("Helvetica", 10, "bold"),
-                                      command=lambda: threading.Thread(target=self.compare_similarity).start(), width=20, height=2, bg="white")
+        similarity_button = tk.Button(compare_frame, text="Percentage Match", font=("Helvetica", 10, "bold"), command=lambda: threading.Thread(target=self.compare_similarity).start(), width=20, height=2, bg="white")
         similarity_button.pack(side=tk.LEFT, padx=(15, 0))
-
-        original_image = Image.open(image1)
-        self.photo = ImageTk.PhotoImage(original_image)
-        self.image_label = tk.Label(self.master, image=self.photo)
-        self.image_label.pack(side="right", padx=35)
 
     def browse_input_folder(self):
         folder_path = filedialog.askdirectory()
@@ -248,7 +252,6 @@ class PDFComparerApp:
         workbook.close()
 
         self.show_progress("Percentage match analysis completed successfully!")
-
 
 if __name__ == "__main__":
     root = tk.Tk()
