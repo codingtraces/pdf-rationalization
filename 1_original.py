@@ -211,7 +211,7 @@ class PDFComparerApp:
         for i in range(len(all_paragraphs)):
             para.append("Paragraph " + str(i + 1))
 
-        workbook = openpyx1.Workbook()
+        workbook = openpyxl.Workbook()
         sheet = workbook.active
         for i in range(len(all_paragraphs)):
             sheet.append([para[i], all_paragraphs[i]])
