@@ -4,7 +4,8 @@ import sys
 import fitz  # PyMuPDF, used for PDF operations
 from tkinter import filedialog
 import re
-import csv
+import openpyxl
+from openpyxl.styles import PatternFill
 from difflib import SequenceMatcher
 from datetime import datetime
 from PIL import Image, ImageTk
@@ -231,30 +232,29 @@ class PDFComparerApp:
 
         current_time = datetime.now()
         format_time = current_time.strftime("%Y%m%d%H%M%S")
-        new_folder = os.path.join(output_folder, f"rationalized_result_{format_time}")
-        os.makedirs(new_folder, exist_ok=True)
+        output_file = os.path.join(output_folder, f"rationalized_result_{format_time}.xlsx")
 
-        paragraphs_file = os.path.join(new_folder, "common_paragraphs.csv")
-        matrix_file = os.path.join(new_folder, "matrix.csv")
+        workbook = openpyxl.Workbook()
+        sheet = workbook.active
+        sheet.title = "Common Paragraphs"
+        sheet.append(["Paragraph ID", "Content"])
+        for i, paragraph in enumerate(common_paragraphs):
+            clean_paragraph = re.sub(r'[\x00-\x1F\x7F-\x9F]', '', paragraph)
+            sheet.append([f"Paragraph {i + 1}", clean_paragraph])
 
-        with open(paragraphs_file, mode='w', newline='', encoding='utf-8') as file:
-            writer = csv.writer(file)
-            writer.writerow(["Paragraph ID", "Content"])
-            for i, paragraph in enumerate(common_paragraphs):
-                clean_paragraph = re.sub(r'[\x00-\x1F\x7F-\x9F]', '', paragraph)
-                writer.writerow([f"Paragraph {i + 1}", clean_paragraph])
+        new_sheet = workbook.create_sheet(title="Matrix")
+        header_row = ["PDF"] + [f"Paragraph {i + 1}" for i in range(len(common_paragraphs))]
+        new_sheet.append(header_row)
+        for row in matrix:
+            new_sheet.append(row)
 
-        with open(matrix_file, mode='w', newline='', encoding='utf-8') as file:
-            writer = csv.writer(file)
-            header_row = ["PDF"] + [f"Paragraph {i + 1}" for i in range(len(common_paragraphs))]
-            writer.writerow(header_row)
-            for row in matrix:
-                writer.writerow(row)
+        workbook.save(output_file)
+        workbook.close()
 
         end_time = time.time()
         elapsed_time = end_time - start_time
         logging.info(f"Processing completed in {elapsed_time:.2f} seconds.")
-        logging.info(f"Results are saved in the folder: {new_folder}")
+        logging.info(f"Results are saved in the file: {output_file}")
 
     def compare_similarity(self):
         input_folder = self.input_folder_path.get()
@@ -281,22 +281,45 @@ class PDFComparerApp:
 
         current_time = datetime.now()
         format_time = current_time.strftime("%Y%m%d%H%M%S")
-        new_folder = os.path.join(output_folder, f"percentage_report_{format_time}")
-        os.makedirs(new_folder, exist_ok=True)
+        output_file = os.path.join(output_folder, f"percentage_report_{format_time}.xlsx")
 
-        paragraphs_file = os.path.join(new_folder, "percentage_match.csv")
+        workbook = openpyxl.Workbook()
+        sheet = workbook.active
+        sheet.title = "Paragraphs"
+        sheet.append(["Paragraph ID", "Content"])
+        for i, paragraph in enumerate(all_paragraphs):
+            clean_paragraph = re.sub(r'[\x00-\x1F\x7F-\x9F]', '', paragraph)
+            sheet.append([f"Paragraph {i + 1}", clean_paragraph])
 
-        with open(paragraphs_file, mode='w', newline='', encoding='utf-8') as file:
-            writer = csv.writer(file)
-            writer.writerow(["Paragraph ID", "Content"])
-            for i, paragraph in enumerate(all_paragraphs):
-                clean_paragraph = re.sub(r'[\x00-\x1F\x7F-\x9F]', '', paragraph)
-                writer.writerow([f"Paragraph {i + 1}", clean_paragraph])
+        new_sheet = workbook.create_sheet(title="Similarity Matrix")
+        header_row = ["Paragraph"] + [f"Paragraph {i + 1}" for i in range(len(all_paragraphs))]
+        new_sheet.append(header_row)
+        matrix = []
+
+        def sort_words(paragraph):
+            return ' '.join(sorted(paragraph.split()))
+
+        sorted_paragraphs = [sort_words(x) for x in all_paragraphs]
+
+        for para1 in range(0, len(sorted_paragraphs)):
+            temp_list = []
+            for para2 in range(0, len(sorted_paragraphs)):
+                m = SequenceMatcher(None, sorted_paragraphs[para1], sorted_paragraphs[para2])
+                s = m.ratio()
+                temp_list.append(round(s * 100, 2))
+            matrix.append(temp_list)
+
+        for row in range(len(matrix)):
+            final_row = [f"Paragraph {row + 1}"] + matrix[row]
+            new_sheet.append(final_row)
+
+        workbook.save(output_file)
+        workbook.close()
 
         end_time = time.time()
         elapsed_time = end_time - start_time
         logging.info(f"Processing completed in {elapsed_time:.2f} seconds.")
-        logging.info(f"Results are saved in the folder: {new_folder}")
+        logging.info(f"Results are saved in the file: {output_file}")
 
 if __name__ == "__main__":
     root = tk.Tk()
