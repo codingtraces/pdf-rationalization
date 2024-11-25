@@ -4,14 +4,16 @@ import sys
 import fitz  # PyMuPDF, used for PDF operations
 from tkinter import filedialog
 import re
-import csv
+import openpyxl
+from openpyxl.styles import PatternFill
 from difflib import SequenceMatcher
 from datetime import datetime
 from PIL import Image, ImageTk
-from multiprocessing import Pool
+from multiprocessing import Pool, cpu_count
 import logging
 import time
 import threading
+import queue
 
 # Configure logging for detailed debugging
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -240,47 +242,46 @@ class PDFComparerApp:
             logging.error("No PDF files found in the input folder.")
             return
 
+        # Split PDF paths into manageable chunks to avoid memory issues
+        chunk_size = 100  # Reduced chunk size for efficient processing
+        pdf_chunks = (pdf_paths[i:i + chunk_size] for i in range(0, len(pdf_paths), chunk_size))
+
         start_time = time.time()
         total_files = len(pdf_paths)
         logging.info(f"Total PDF files to process: {total_files}")
 
-        try:
-            common_paragraphs, matrix = self.compare_paragraphs(pdf_paths, "pdfcompare")
-        except Exception as e:
-            logging.error(f"Error during comparison: {str(e)}")
-            return
+        for chunk_index, pdf_chunk in enumerate(pdf_chunks):
+            logging.info(f"Processing chunk {chunk_index + 1}")
+            try:
+                common_paragraphs, matrix = self.compare_paragraphs(pdf_chunk, "pdfcompare")
+            except Exception as e:
+                logging.error(f"Error during comparison of chunk {chunk_index + 1}: {str(e)}")
+                continue
 
-        # Prepare paragraph labels
-        para = ["Paragraph " + str(i + 1) for i in range(len(common_paragraphs))]
+            # Prepare paragraph labels
+            para = ["Paragraph " + str(i + 1) for i in range(len(common_paragraphs))]
 
-        # Save the common paragraphs and matrix to a single CSV file with two sections
-        current_time = datetime.now()
-        format_time = current_time.strftime("%Y%m%d%H%M%S")
-        output_csv_path = os.path.join(output_folder, f"resultoutput-{format_time}.csv")
+            # Create a new workbook and write the common paragraphs
+            workbook = openpyxl.Workbook()
+            sheet = workbook.active
+            for i in range(len(common_paragraphs)):
+                clean_paragraph = re.sub(r'[\x00-\x1F\x7F-\x9F]', '', common_paragraphs[i])
+                sheet.append([para[i], clean_paragraph])
 
-        # Write paragraphs and matrix to CSV
-        try:
-            with open(output_csv_path, mode='w', newline='', encoding='utf-8') as file:
-                writer = csv.writer(file)
+            # Add matrix data to a new sheet
+            header_row = ["PDF"] + para
+            new_sheet = workbook.create_sheet(title=f"Pdf Results Chunk {chunk_index + 1}")
+            new_sheet.append(header_row)
 
-                # Write paragraphs section
-                writer.writerow(["Paragraphs Section"])
-                writer.writerow(["Paragraph Label", "Content"])
-                for i in range(len(common_paragraphs)):
-                    clean_paragraph = re.sub(r'[\x00-\x1F\x7F-\x9F]', '', common_paragraphs[i])
-                    writer.writerow([para[i], clean_paragraph])
+            for row in matrix:
+                new_sheet.append(row)
 
-                # Write a separator for the matrix section
-                writer.writerow([])
-                writer.writerow(["Matrix Section"])
-
-                # Write matrix section
-                header_row = ["PDF"] + para
-                writer.writerow(header_row)
-                for row in matrix:
-                    writer.writerow(row)
-        except Exception as e:
-            logging.error(f"Error writing to CSV: {str(e)}")
+            # Save the workbook with a timestamp
+            current_time = datetime.now()
+            format_time = current_time.strftime("%Y%m%d%H%M%S")
+            location = os.path.join(output_folder, f"resultoutput-chunk{chunk_index + 1}-{format_time}.xlsx")
+            workbook.save(location)
+            workbook.close()
 
         end_time = time.time()
         elapsed_time = end_time - start_time
@@ -300,65 +301,65 @@ class PDFComparerApp:
             logging.error("No PDF files found in the input folder.")
             return
 
+        # Split PDF paths into manageable chunks to avoid memory issues
+        chunk_size = 100  # Reduced chunk size for efficient processing
+        pdf_chunks = (pdf_paths[i:i + chunk_size] for i in range(0, len(pdf_paths), chunk_size))
+
         start_time = time.time()
         total_files = len(pdf_paths)
         logging.info(f"Total PDF files to process: {total_files}")
 
-        try:
-            all_paragraphs = self.compare_paragraphs(pdf_paths, "percentage_match")
-        except Exception as e:
-            logging.error(f"Error during similarity comparison: {str(e)}")
-            return
+        for chunk_index, pdf_chunk in enumerate(pdf_chunks):
+            logging.info(f"Processing chunk {chunk_index + 1}")
+            try:
+                all_paragraphs = self.compare_paragraphs(pdf_chunk, "percentage_match")
+            except Exception as e:
+                logging.error(f"Error during similarity comparison of chunk {chunk_index + 1}: {str(e)}")
+                continue
 
-        # Prepare paragraph labels
-        para = ["Paragraph " + str(i + 1) for i in range(len(all_paragraphs))]
+            # Prepare paragraph labels
+            para = ["Paragraph " + str(i + 1) for i in range(len(all_paragraphs))]
 
-        # Save the paragraphs and similarity matrix to a single CSV file with two sections
-        current_time = datetime.now()
-        format_time = current_time.strftime("%Y%m%d%H%M%S")
-        output_csv_path = os.path.join(output_folder, f"percentage-output-{format_time}.csv")
+            # Create a new workbook and write the paragraphs
+            workbook = openpyxl.Workbook()
+            sheet = workbook.active
+            for i in range(len(all_paragraphs)):
+                clean_paragraph = re.sub(r'[\x00-\x1F\x7F-\x9F]', '', all_paragraphs[i])
+                sheet.append([para[i], clean_paragraph])
 
-        # Write paragraphs and similarity matrix to CSV
-        try:
-            with open(output_csv_path, mode='w', newline='', encoding='utf-8') as file:
-                writer = csv.writer(file)
+            # Add similarity data to a new sheet
+            header_row = ["PDF"] + para
+            new_sheet = workbook.create_sheet(title=f"Percentage Match Chunk {chunk_index + 1}")
+            new_sheet.append(header_row)
+            matrix = []
 
-                # Write paragraphs section
-                writer.writerow(["Paragraphs Section"])
-                writer.writerow(["Paragraph Label", "Content"])
-                for i in range(len(all_paragraphs)):
-                    clean_paragraph = re.sub(r'[\x00-\x1F\x7F-\x9F]', '', all_paragraphs[i])
-                    writer.writerow([para[i], clean_paragraph])
+            # Helper function to sort words in a paragraph for comparison
+            def sort_words(paragraph):
+                return ' '.join(sorted(paragraph.split()))
 
-                # Write a separator for the similarity matrix section
-                writer.writerow([])
-                writer.writerow(["Similarity Matrix Section"])
+            sorted_paragraphs = [sort_words(x) for x in all_paragraphs]
 
-                # Helper function to sort words in a paragraph for comparison
-                def sort_words(paragraph):
-                    return ' '.join(sorted(paragraph.split()))
+            # Calculate the similarity matrix
+            for para1 in range(0, len(sorted_paragraphs)):
+                temp_list = []
+                for para2 in range(0, len(sorted_paragraphs)):
+                    m = SequenceMatcher(None, sorted_paragraphs[para1], sorted_paragraphs[para2])
+                    s = m.ratio()  # Get the similarity ratio
+                    temp_list.append(round(s * 100, 2))  # Convert to percentage and round
 
-                sorted_paragraphs = [sort_words(x) for x in all_paragraphs]
-                matrix = []
+                matrix.append(temp_list)
 
-                # Calculate the similarity matrix
-                for para1 in range(0, len(sorted_paragraphs)):
-                    temp_list = []
-                    for para2 in range(0, len(sorted_paragraphs)):
-                        m = SequenceMatcher(None, sorted_paragraphs[para1], sorted_paragraphs[para2])
-                        s = m.ratio()  # Get the similarity ratio
-                        temp_list.append(round(s * 100, 2))  # Convert to percentage and round
+            # Write the similarity matrix to the workbook
+            for row in range(len(matrix)):
+                final_row = [para[row]] + matrix[row]
+                new_sheet.append(final_row)
 
-                    matrix.append(temp_list)
-
-                # Write similarity matrix section
-                header_row = ["Paragraph"] + para
-                writer.writerow(header_row)
-                for row in range(len(matrix)):
-                    final_row = [para[row]] + matrix[row]
-                    writer.writerow(final_row)
-        except Exception as e:
-            logging.error(f"Error writing to CSV: {str(e)}")
+            # Save the workbook with a timestamp
+            current_time = datetime.now()
+            format_time = current_time.strftime("%Y%m%d%H%M%S")
+            location = os.path.join(output_folder, f"percentage-chunk{chunk_index + 1}-{format_time}.xlsx")
+            workbook.save(location)
+            workbook.close()
 
         end_time = time.time()
         elapsed_time = end_time - start_time
@@ -370,17 +371,19 @@ class PDFComparerApp:
         total_files = len(pdf_paths)
         logging.info(f"Starting batch processing of {total_files} PDF files.")
         try:
-            with Pool() as pool:
+            with Pool(processes=cpu_count()) as pool:
                 results = pool.map(self.extract_paragraphs_from_pdf, pdf_paths)
             end_time = time.time()
             elapsed_time = end_time - start_time
-        except Exception as e:
-            logging.error(f"Error during batch processing: {str(e)}")
-        finally:
             logging.info(f"Batch processing completed in {elapsed_time:.2f} seconds.")
+            return results
+        except Exception as e:
+            logging.error(f"Batch processing failed: {str(e)}")
+            return []
 
 
 if __name__ == "__main__":
     root = tk.Tk()
+    root.configure(bg="#1a1a2e")
     app = PDFComparerApp(root)
     root.mainloop()
