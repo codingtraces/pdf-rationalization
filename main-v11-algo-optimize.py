@@ -231,7 +231,7 @@ class PDFComparerApp:
 
         current_time = datetime.now()
         format_time = current_time.strftime("%Y%m%d%H%M%S")
-        new_folder = os.path.join(output_folder, f"result_{format_time}")
+        new_folder = os.path.join(output_folder, f"rationalized_result_{format_time}")
         os.makedirs(new_folder, exist_ok=True)
 
         paragraphs_file = os.path.join(new_folder, "common_paragraphs.csv")
@@ -254,6 +254,7 @@ class PDFComparerApp:
         end_time = time.time()
         elapsed_time = end_time - start_time
         logging.info(f"Processing completed in {elapsed_time:.2f} seconds.")
+        logging.info(f"Results are saved in the folder: {new_folder}")
 
     def compare_similarity(self):
         input_folder = self.input_folder_path.get()
@@ -280,7 +281,7 @@ class PDFComparerApp:
 
         current_time = datetime.now()
         format_time = current_time.strftime("%Y%m%d%H%M%S")
-        new_folder = os.path.join(output_folder, f"result_{format_time}")
+        new_folder = os.path.join(output_folder, f"percentage_report_{format_time}")
         os.makedirs(new_folder, exist_ok=True)
 
         paragraphs_file = os.path.join(new_folder, "percentage_match.csv")
@@ -295,6 +296,7 @@ class PDFComparerApp:
         end_time = time.time()
         elapsed_time = end_time - start_time
         logging.info(f"Processing completed in {elapsed_time:.2f} seconds.")
+        logging.info(f"Results are saved in the folder: {new_folder}")
 
 if __name__ == "__main__":
     root = tk.Tk()
