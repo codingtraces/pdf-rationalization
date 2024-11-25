@@ -13,6 +13,7 @@ from pdfminer.high_level import extract_text
 from multiprocessing import Pool
 import logging
 import time
+import threading
 
 # Configure logging for detailed debugging
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -118,12 +119,12 @@ class PDFComparerApp:
 
         # Button for Rationalize operation
         compare_button = tk.Button(compare_frame, text="Rationalise", font=("Helvetica", 10, "bold"),
-                                   command=self.compare_pdfs, width=20, height=2, bg="white")
+                                   command=lambda: threading.Thread(target=self.compare_pdfs).start(), width=20, height=2, bg="white")
         compare_button.pack(side=tk.LEFT)
 
         # Button for Percentage Match operation
         similarity_button = tk.Button(compare_frame, text="Percentage Match", font=("Helvetica", 10, "bold"),
-                                      command=self.compare_similarity, width=20, height=2, bg="white")
+                                      command=lambda: threading.Thread(target=self.compare_similarity).start(), width=20, height=2, bg="white")
         similarity_button.pack(side=tk.LEFT, padx=(15, 0))
 
     # Browse and select the input folder
@@ -188,8 +189,8 @@ class PDFComparerApp:
             all_paragraphs = set()
             # Dictionary to store paragraphs from each PDF
             pdf_paragraphs = {}
-            for pdf_path in pdf_paths:
-                logging.info(f"Extracting paragraphs from {pdf_path}")
+            for index, pdf_path in enumerate(pdf_paths):
+                logging.info(f"Extracting paragraphs from {pdf_path} ({index + 1}/{len(pdf_paths)})")
                 paragraphs = set(self.extract_paragraphs_from_pdf(pdf_path))
                 all_paragraphs.update(paragraphs)
                 pdf_paragraphs[pdf_path] = paragraphs
@@ -210,8 +211,8 @@ class PDFComparerApp:
         elif compare == "percentage_match":
             # Extract paragraphs from all PDFs into a single list
             all_paragraphs = []
-            for pdf_path in pdf_paths:
-                logging.info(f"Extracting paragraphs from {pdf_path}")
+            for index, pdf_path in enumerate(pdf_paths):
+                logging.info(f"Extracting paragraphs from {pdf_path} ({index + 1}/{len(pdf_paths)})")
                 paragraphs = self.extract_paragraphs_from_pdf(pdf_path)
                 all_paragraphs.extend(paragraphs)
 
@@ -236,7 +237,11 @@ class PDFComparerApp:
         total_files = len(pdf_paths)
         logging.info(f"Total PDF files to process: {total_files}")
 
-        common_paragraphs, matrix = self.compare_paragraphs(pdf_paths, "pdfcompare")
+        try:
+            common_paragraphs, matrix = self.compare_paragraphs(pdf_paths, "pdfcompare")
+        except Exception as e:
+            logging.error(f"Error during comparison: {str(e)}")
+            return
 
         # Prepare paragraph labels
         para = ["Paragraph " + str(i + 1) for i in range(len(common_paragraphs))]
@@ -285,7 +290,11 @@ class PDFComparerApp:
         total_files = len(pdf_paths)
         logging.info(f"Total PDF files to process: {total_files}")
 
-        all_paragraphs = self.compare_paragraphs(pdf_paths, "percentage_match")
+        try:
+            all_paragraphs = self.compare_paragraphs(pdf_paths, "percentage_match")
+        except Exception as e:
+            logging.error(f"Error during similarity comparison: {str(e)}")
+            return
 
         # Prepare paragraph labels
         para = ["Paragraph " + str(i + 1) for i in range(len(all_paragraphs))]
