@@ -219,42 +219,37 @@ class PDFComparerApp:
             logging.error("No PDF files found in the input folder.")
             return
 
-        chunk_size = 100
-        pdf_chunks = (pdf_paths[i:i + chunk_size] for i in range(0, len(pdf_paths), chunk_size))
-
         start_time = time.time()
         total_files = len(pdf_paths)
         logging.info(f"Total PDF files to process: {total_files}")
 
-        for chunk_index, pdf_chunk in enumerate(pdf_chunks):
-            logging.info(f"Processing chunk {chunk_index + 1}")
-            try:
-                common_paragraphs, matrix = self.compare_paragraphs(pdf_chunk, "pdfcompare")
-            except Exception as e:
-                logging.error(f"Error during comparison of chunk {chunk_index + 1}: {str(e)}")
-                continue
+        try:
+            common_paragraphs, matrix = self.compare_paragraphs(pdf_paths, "pdfcompare")
+        except Exception as e:
+            logging.error(f"Error during comparison: {str(e)}")
+            return
 
-            current_time = datetime.now()
-            format_time = current_time.strftime("%Y%m%d%H%M%S")
-            new_folder = os.path.join(output_folder, f"result_{format_time}")
-            os.makedirs(new_folder, exist_ok=True)
+        current_time = datetime.now()
+        format_time = current_time.strftime("%Y%m%d%H%M%S")
+        new_folder = os.path.join(output_folder, f"result_{format_time}")
+        os.makedirs(new_folder, exist_ok=True)
 
-            paragraphs_file = os.path.join(new_folder, f"common_paragraphs_chunk{chunk_index + 1}.csv")
-            matrix_file = os.path.join(new_folder, f"matrix_chunk{chunk_index + 1}.csv")
+        paragraphs_file = os.path.join(new_folder, "common_paragraphs.csv")
+        matrix_file = os.path.join(new_folder, "matrix.csv")
 
-            with open(paragraphs_file, mode='w', newline='', encoding='utf-8') as file:
-                writer = csv.writer(file)
-                writer.writerow(["Paragraph ID", "Content"])
-                for i, paragraph in enumerate(common_paragraphs):
-                    clean_paragraph = re.sub(r'[\x00-\x1F\x7F-\x9F]', '', paragraph)
-                    writer.writerow([f"Paragraph {i + 1}", clean_paragraph])
+        with open(paragraphs_file, mode='w', newline='', encoding='utf-8') as file:
+            writer = csv.writer(file)
+            writer.writerow(["Paragraph ID", "Content"])
+            for i, paragraph in enumerate(common_paragraphs):
+                clean_paragraph = re.sub(r'[\x00-\x1F\x7F-\x9F]', '', paragraph)
+                writer.writerow([f"Paragraph {i + 1}", clean_paragraph])
 
-            with open(matrix_file, mode='w', newline='', encoding='utf-8') as file:
-                writer = csv.writer(file)
-                header_row = ["PDF"] + [f"Paragraph {i + 1}" for i in range(len(common_paragraphs))]
-                writer.writerow(header_row)
-                for row in matrix:
-                    writer.writerow(row)
+        with open(matrix_file, mode='w', newline='', encoding='utf-8') as file:
+            writer = csv.writer(file)
+            header_row = ["PDF"] + [f"Paragraph {i + 1}" for i in range(len(common_paragraphs))]
+            writer.writerow(header_row)
+            for row in matrix:
+                writer.writerow(row)
 
         end_time = time.time()
         elapsed_time = end_time - start_time
@@ -273,34 +268,29 @@ class PDFComparerApp:
             logging.error("No PDF files found in the input folder.")
             return
 
-        chunk_size = 100
-        pdf_chunks = (pdf_paths[i:i + chunk_size] for i in range(0, len(pdf_paths), chunk_size))
-
         start_time = time.time()
         total_files = len(pdf_paths)
         logging.info(f"Total PDF files to process: {total_files}")
 
-        for chunk_index, pdf_chunk in enumerate(pdf_chunks):
-            logging.info(f"Processing chunk {chunk_index + 1}")
-            try:
-                all_paragraphs = self.compare_paragraphs(pdf_chunk, "percentage_match")
-            except Exception as e:
-                logging.error(f"Error during similarity comparison of chunk {chunk_index + 1}: {str(e)}")
-                continue
+        try:
+            all_paragraphs = self.compare_paragraphs(pdf_paths, "percentage_match")
+        except Exception as e:
+            logging.error(f"Error during similarity comparison: {str(e)}")
+            return
 
-            current_time = datetime.now()
-            format_time = current_time.strftime("%Y%m%d%H%M%S")
-            new_folder = os.path.join(output_folder, f"result_{format_time}")
-            os.makedirs(new_folder, exist_ok=True)
+        current_time = datetime.now()
+        format_time = current_time.strftime("%Y%m%d%H%M%S")
+        new_folder = os.path.join(output_folder, f"result_{format_time}")
+        os.makedirs(new_folder, exist_ok=True)
 
-            paragraphs_file = os.path.join(new_folder, f"percentage_match_chunk{chunk_index + 1}.csv")
+        paragraphs_file = os.path.join(new_folder, "percentage_match.csv")
 
-            with open(paragraphs_file, mode='w', newline='', encoding='utf-8') as file:
-                writer = csv.writer(file)
-                writer.writerow(["Paragraph ID", "Content"])
-                for i, paragraph in enumerate(all_paragraphs):
-                    clean_paragraph = re.sub(r'[\x00-\x1F\x7F-\x9F]', '', paragraph)
-                    writer.writerow([f"Paragraph {i + 1}", clean_paragraph])
+        with open(paragraphs_file, mode='w', newline='', encoding='utf-8') as file:
+            writer = csv.writer(file)
+            writer.writerow(["Paragraph ID", "Content"])
+            for i, paragraph in enumerate(all_paragraphs):
+                clean_paragraph = re.sub(r'[\x00-\x1F\x7F-\x9F]', '', paragraph)
+                writer.writerow([f"Paragraph {i + 1}", clean_paragraph])
 
         end_time = time.time()
         elapsed_time = end_time - start_time
