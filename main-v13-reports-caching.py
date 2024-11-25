@@ -13,6 +13,8 @@ import threading
 import logging
 import time
 import csv
+import hashlib
+from functools import lru_cache
 
 # Configure logging for detailed debugging
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -26,6 +28,52 @@ else:
 # Paths to the logo images
 image1 = os.path.join(base_path, 'dev-logo.png')
 image2 = os.path.join(base_path, 'dev-logo.png')
+
+def hash_paragraph(paragraph):
+    return hashlib.sha256(paragraph.encode('utf-8')).hexdigest()
+
+@lru_cache(maxsize=1024)
+def extract_paragraphs_from_pdf_cached(file_path, file_modified_time):
+    paragraphs = []
+    try:
+        logging.info(f"Extracting text from {file_path} using PyMuPDF.")
+        with fitz.open(file_path) as doc:
+            text = ""
+            for page in doc:
+                text += page.get_text()
+
+        lines = text.splitlines()
+        paragraph = ""
+        for line in lines:
+            if line.strip():
+                if paragraph:
+                    paragraph += " " + line.strip()
+                else:
+                    paragraph = line.strip()
+            else:
+                if paragraph:
+                    paragraphs.append(paragraph.strip())
+                    paragraph = ""
+        if paragraph:
+            paragraphs.append(paragraph.strip())
+
+        combined_paragraphs = []
+        temp_paragraph = ""
+        for para in paragraphs:
+            if len(para.split()) < 20:
+                temp_paragraph += " " + para
+            else:
+                if temp_paragraph:
+                    combined_paragraphs.append(temp_paragraph.strip())
+                    temp_paragraph = ""
+                combined_paragraphs.append(para)
+        if temp_paragraph:
+            combined_paragraphs.append(temp_paragraph.strip())
+
+        return combined_paragraphs
+    except Exception as e:
+        logging.error(f"Error extracting text from {file_path}: {str(e)}")
+    return paragraphs
 
 class PDFComparerApp:
     def __init__(self, master):
@@ -149,67 +197,30 @@ class PDFComparerApp:
             self.output_folder_path.set(folder_path)
 
     def extract_paragraphs_from_pdf(self, file_path):
-        paragraphs = []
-        try:
-            logging.info(f"Extracting text from {file_path} using PyMuPDF.")
-            with fitz.open(file_path) as doc:
-                text = ""
-                for page in doc:
-                    text += page.get_text()
-
-            lines = text.splitlines()
-            paragraph = ""
-            for line in lines:
-                if line.strip():
-                    if paragraph:
-                        paragraph += " " + line.strip()
-                    else:
-                        paragraph = line.strip()
-                else:
-                    if paragraph:
-                        paragraphs.append(paragraph.strip())
-                        paragraph = ""
-            if paragraph:
-                paragraphs.append(paragraph.strip())
-
-            combined_paragraphs = []
-            temp_paragraph = ""
-            for para in paragraphs:
-                if len(para.split()) < 20:
-                    temp_paragraph += " " + para
-                else:
-                    if temp_paragraph:
-                        combined_paragraphs.append(temp_paragraph.strip())
-                        temp_paragraph = ""
-                    combined_paragraphs.append(para)
-            if temp_paragraph:
-                combined_paragraphs.append(temp_paragraph.strip())
-
-            return combined_paragraphs
-        except Exception as e:
-            logging.error(f"Error extracting text from {file_path}: {str(e)}")
-        return paragraphs
+        file_modified_time = os.path.getmtime(file_path)
+        return extract_paragraphs_from_pdf_cached(file_path, file_modified_time)
 
     def compare_paragraphs(self, pdf_paths, compare):
         if compare == "pdfcompare":
-            all_paragraphs = set()
-            pdf_paragraphs = {}
+            all_hashes = set()
+            pdf_hashes = {}
             for index, pdf_path in enumerate(pdf_paths):
                 logging.info(f"Extracting paragraphs from {pdf_path} ({index + 1}/{len(pdf_paths)})")
-                paragraphs = set(self.extract_paragraphs_from_pdf(pdf_path))
-                all_paragraphs.update(paragraphs)
-                pdf_paragraphs[pdf_path] = paragraphs
+                paragraphs = self.extract_paragraphs_from_pdf(pdf_path)
+                hashes = set(hash_paragraph(para) for para in paragraphs)
+                all_hashes.update(hashes)
+                pdf_hashes[pdf_path] = hashes
 
-            all_paragraphs = sorted(list(all_paragraphs))
+            all_hashes = sorted(list(all_hashes))
 
             matrix = []
             for pdf_path in pdf_paths:
                 row = [os.path.basename(pdf_path)]
-                for paragraph in all_paragraphs:
-                    row.append(1 if paragraph in pdf_paragraphs[pdf_path] else 0)
+                for hash_value in all_hashes:
+                    row.append(1 if hash_value in pdf_hashes[pdf_path] else 0)
                 matrix.append(row)
 
-            return all_paragraphs, matrix
+            return all_hashes, matrix
 
         elif compare == "percentage_match":
             all_paragraphs = []
@@ -238,7 +249,7 @@ class PDFComparerApp:
         logging.info(f"Total PDF files to process: {total_files}")
 
         try:
-            common_paragraphs, matrix = self.compare_paragraphs(pdf_paths, "pdfcompare")
+            common_hashes, matrix = self.compare_paragraphs(pdf_paths, "pdfcompare")
         except Exception as e:
             logging.error(f"Error during comparison: {str(e)}")
             return
@@ -250,13 +261,12 @@ class PDFComparerApp:
         workbook = openpyxl.Workbook()
         sheet = workbook.active
         sheet.title = "Common Paragraphs"
-        sheet.append(["Paragraph ID", "Content"])
-        for i, paragraph in enumerate(common_paragraphs):
-            clean_paragraph = re.sub(r'[\x00-\x1F\x7F-\x9F]', '', paragraph)
-            sheet.append([f"Paragraph {i + 1}", clean_paragraph])
+        sheet.append(["Paragraph ID", "Hash"])
+        for i, hash_value in enumerate(common_hashes):
+            sheet.append([f"Paragraph {i + 1}", hash_value])
 
         new_sheet = workbook.create_sheet(title="Matrix")
-        header_row = ["PDF"] + [f"Paragraph {i + 1}" for i in range(len(common_paragraphs))]
+        header_row = ["PDF"] + [f"Paragraph {i + 1}" for i in range(len(common_hashes))]
         new_sheet.append(header_row)
         for row in matrix:
             new_sheet.append(row)
@@ -287,7 +297,7 @@ class PDFComparerApp:
         logging.info(f"Total PDF files to process: {total_files}")
 
         try:
-            common_paragraphs, matrix = self.compare_paragraphs(pdf_paths, "pdfcompare")
+            common_hashes, matrix = self.compare_paragraphs(pdf_paths, "pdfcompare")
         except Exception as e:
             logging.error(f"Error during comparison: {str(e)}")
             return
@@ -300,15 +310,14 @@ class PDFComparerApp:
         # Write Common Paragraphs to CSV
         with open(output_csv_common, mode='w', newline='', encoding='utf-8') as file:
             writer = csv.writer(file)
-            writer.writerow(["Paragraph ID", "Content"])
-            for i, paragraph in enumerate(common_paragraphs):
-                clean_paragraph = re.sub(r'[\x00-\x1F\x7F-\x9F]', '', paragraph)
-                writer.writerow([f"Paragraph {i + 1}", clean_paragraph])
+            writer.writerow(["Paragraph ID", "Hash"])
+            for i, hash_value in enumerate(common_hashes):
+                writer.writerow([f"Paragraph {i + 1}", hash_value])
 
         # Write Matrix to CSV
         with open(output_csv_matrix, mode='w', newline='', encoding='utf-8') as file:
             writer = csv.writer(file)
-            header_row = ["PDF"] + [f"Paragraph {i + 1}" for i in range(len(common_paragraphs))]
+            header_row = ["PDF"] + [f"Paragraph {i + 1}" for i in range(len(common_hashes))]
             writer.writerow(header_row)
             for row in matrix:
                 writer.writerow(row)
