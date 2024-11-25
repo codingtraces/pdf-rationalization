@@ -370,7 +370,15 @@ class PDFComparerApp:
         total_files = len(pdf_paths)
         logging.info(f"Starting batch processing of {total_files} PDF files.")
         try:
-            with Pool(processes=4) as pool:
-                results = pool.map(self.extract_paragraphs_from_pdf, pdf_paths)
-            end_time = time.time()
-            elapsed_time = end_time - start_time
+            results = pool.map(self.extract_paragraphs_from_pdf, pdf_paths)
+        end_time = time.time()
+        elapsed_time = end_time - start_time
+
+    except Exception as e:
+    logging.error(f"Error during batch processing: {str(e)}")
+
+finally:
+logging.info(f"Batch processing completed in {elapsed_time:.2f} seconds.")
+results = pool.map(self.extract_paragraphs_from_pdf, pdf_paths)
+end_time = time.time()
+elapsed_time = end_time - start_time
