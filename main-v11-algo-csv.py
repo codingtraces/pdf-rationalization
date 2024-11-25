@@ -253,33 +253,34 @@ class PDFComparerApp:
         # Prepare paragraph labels
         para = ["Paragraph " + str(i + 1) for i in range(len(common_paragraphs))]
 
-        # Save the common paragraphs and matrix to CSV files
+        # Save the common paragraphs and matrix to a single CSV file with two sections
         current_time = datetime.now()
         format_time = current_time.strftime("%Y%m%d%H%M%S")
-        paragraphs_csv_path = os.path.join(output_folder, f"resultoutput-paragraphs-{format_time}.csv")
-        matrix_csv_path = os.path.join(output_folder, f"resultoutput-matrix-{format_time}.csv")
+        output_csv_path = os.path.join(output_folder, f"resultoutput-{format_time}.csv")
 
-        # Write paragraphs to CSV
+        # Write paragraphs and matrix to CSV
         try:
-            with open(paragraphs_csv_path, mode='w', newline='', encoding='utf-8') as file:
+            with open(output_csv_path, mode='w', newline='', encoding='utf-8') as file:
                 writer = csv.writer(file)
+
+                # Write paragraphs section
+                writer.writerow(["Paragraphs Section"])
                 writer.writerow(["Paragraph Label", "Content"])
                 for i in range(len(common_paragraphs)):
                     clean_paragraph = re.sub(r'[\x00-\x1F\x7F-\x9F]', '', common_paragraphs[i])
                     writer.writerow([para[i], clean_paragraph])
-        except Exception as e:
-            logging.error(f"Error writing paragraphs to CSV: {str(e)}")
 
-        # Write matrix to CSV
-        try:
-            with open(matrix_csv_path, mode='w', newline='', encoding='utf-8') as file:
-                writer = csv.writer(file)
+                # Write a separator for the matrix section
+                writer.writerow([])
+                writer.writerow(["Matrix Section"])
+
+                # Write matrix section
                 header_row = ["PDF"] + para
                 writer.writerow(header_row)
                 for row in matrix:
                     writer.writerow(row)
         except Exception as e:
-            logging.error(f"Error writing matrix to CSV: {str(e)}")
+            logging.error(f"Error writing to CSV: {str(e)}")
 
         end_time = time.time()
         elapsed_time = end_time - start_time
@@ -312,51 +313,52 @@ class PDFComparerApp:
         # Prepare paragraph labels
         para = ["Paragraph " + str(i + 1) for i in range(len(all_paragraphs))]
 
-        # Save the paragraphs and similarity matrix to CSV files
+        # Save the paragraphs and similarity matrix to a single CSV file with two sections
         current_time = datetime.now()
         format_time = current_time.strftime("%Y%m%d%H%M%S")
-        paragraphs_csv_path = os.path.join(output_folder, f"percentage-paragraphs-{format_time}.csv")
-        similarity_csv_path = os.path.join(output_folder, f"percentage-similarity-{format_time}.csv")
+        output_csv_path = os.path.join(output_folder, f"percentage-output-{format_time}.csv")
 
-        # Write paragraphs to CSV
+        # Write paragraphs and similarity matrix to CSV
         try:
-            with open(paragraphs_csv_path, mode='w', newline='', encoding='utf-8') as file:
+            with open(output_csv_path, mode='w', newline='', encoding='utf-8') as file:
                 writer = csv.writer(file)
+
+                # Write paragraphs section
+                writer.writerow(["Paragraphs Section"])
                 writer.writerow(["Paragraph Label", "Content"])
                 for i in range(len(all_paragraphs)):
                     clean_paragraph = re.sub(r'[\x00-\x1F\x7F-\x9F]', '', all_paragraphs[i])
                     writer.writerow([para[i], clean_paragraph])
-        except Exception as e:
-            logging.error(f"Error writing paragraphs to CSV: {str(e)}")
 
-        # Helper function to sort words in a paragraph for comparison
-        def sort_words(paragraph):
-            return ' '.join(sorted(paragraph.split()))
+                # Write a separator for the similarity matrix section
+                writer.writerow([])
+                writer.writerow(["Similarity Matrix Section"])
 
-        sorted_paragraphs = [sort_words(x) for x in all_paragraphs]
-        matrix = []
+                # Helper function to sort words in a paragraph for comparison
+                def sort_words(paragraph):
+                    return ' '.join(sorted(paragraph.split()))
 
-        # Calculate the similarity matrix
-        for para1 in range(0, len(sorted_paragraphs)):
-            temp_list = []
-            for para2 in range(0, len(sorted_paragraphs)):
-                m = SequenceMatcher(None, sorted_paragraphs[para1], sorted_paragraphs[para2])
-                s = m.ratio()  # Get the similarity ratio
-                temp_list.append(round(s * 100, 2))  # Convert to percentage and round
+                sorted_paragraphs = [sort_words(x) for x in all_paragraphs]
+                matrix = []
 
-            matrix.append(temp_list)
+                # Calculate the similarity matrix
+                for para1 in range(0, len(sorted_paragraphs)):
+                    temp_list = []
+                    for para2 in range(0, len(sorted_paragraphs)):
+                        m = SequenceMatcher(None, sorted_paragraphs[para1], sorted_paragraphs[para2])
+                        s = m.ratio()  # Get the similarity ratio
+                        temp_list.append(round(s * 100, 2))  # Convert to percentage and round
 
-        # Write similarity matrix to CSV
-        try:
-            with open(similarity_csv_path, mode='w', newline='', encoding='utf-8') as file:
-                writer = csv.writer(file)
+                    matrix.append(temp_list)
+
+                # Write similarity matrix section
                 header_row = ["Paragraph"] + para
                 writer.writerow(header_row)
                 for row in range(len(matrix)):
                     final_row = [para[row]] + matrix[row]
                     writer.writerow(final_row)
         except Exception as e:
-            logging.error(f"Error writing similarity matrix to CSV: {str(e)}")
+            logging.error(f"Error writing to CSV: {str(e)}")
 
         end_time = time.time()
         elapsed_time = end_time - start_time
@@ -372,15 +374,3 @@ class PDFComparerApp:
                 results = pool.map(self.extract_paragraphs_from_pdf, pdf_paths)
             end_time = time.time()
             elapsed_time = end_time - start_time
-            logging.info(f"Batch processing completed in {elapsed_time:.2f} seconds.")
-            return results
-        except Exception as e:
-            logging.error(f"Batch processing failed: {str(e)}")
-            return []
-
-
-if __name__ == "__main__":
-    root = tk.Tk()
-    root.configure(bg="#1a1a2e")
-    app = PDFComparerApp(root)
-    root.mainloop()
